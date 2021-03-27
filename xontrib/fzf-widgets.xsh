@@ -71,16 +71,21 @@ def fzf_insert_file(event, dirs_only=False):
                 cwd = os.getcwd()
                 os.chdir(expanded_path)
 
-    env = os.environ
+    env_overrides = {'SHELL': 'bash'}
+    fzf_default_command = None
     if dirs_only:
         if 'fzf_find_dirs_command' in ${...}:
-            env['FZF_DEFAULT_COMMAND'] = $fzf_find_dirs_command
-    else:
-        if 'fzf_find_command' in ${...}:
-            env['FZF_DEFAULT_COMMAND'] = $fzf_find_command
+            fzf_default_command = $fzf_find_dirs_command
+        else:
+            fzf_default_command = r"set -o pipefail; command find -L . -mindepth 1 \( -path '*/\.*' -o -fstype 'sysfs' -o -fstype 'devfs' -o -fstype 'devtmpfs' -o -fstype 'proc' \) -prune -o -type d -print 2> /dev/null | cut -b3-"
+    elif 'fzf_find_command' in ${...}:
+        fzf_default_command = $fzf_find_command
+    if fzf_default_command:
+        env_overrides['FZF_DEFAULT_COMMAND'] = fzf_default_command
     if 'FZF_DEFAULT_OPTS' in ${...}:
-        env['FZF_DEFAULT_OPTS'] = $FZF_DEFAULT_OPTS
-    choice = subprocess.run([get_fzf_binary_path(), '-m', '--reverse', '--height=40%'], stdout=subprocess.PIPE, universal_newlines=True, env=env).stdout.strip()
+        env_overrides['FZF_DEFAULT_OPTS'] = $FZF_DEFAULT_OPTS
+    with ${...}.swap(**env_overrides) as env:
+        choice = subprocess.run([get_fzf_binary_path(), '-m', '--reverse', '--height=40%'], stdout=subprocess.PIPE, universal_newlines=True, env=env.detype()).stdout.strip()
 
     if cwd:
         os.chdir(cwd)
